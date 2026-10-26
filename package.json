@@ -9,8 +9,8 @@
     "share": "ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -R 80:127.0.0.1:5173 nokey@localhost.run",
     "server": "tsx watch server/index.ts",
     "client": "vite",
-    "build": "vite build",
-    "start": "tsx server/index.ts"
+    "build": "node ./node_modules/vite/bin/vite.js build",
+    "start": "node --import tsx server/index.ts"
   },
   "dependencies": {
     "@types/cors": "^2.8.17",
