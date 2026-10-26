@@ -56,6 +56,7 @@ export interface Message {
   readBy: string[];
   pinned?: boolean;
   isSystem?: boolean;
+  isEncrypted?: boolean;
 }
 
 export interface Chat {
@@ -153,3 +154,41 @@ export interface ThemeConfig {
   avatarShape: AvatarShape;
   compactSidebar: boolean;
 }
+
+export interface AppSettings {
+  // Visual & UI
+  uiScale: number; // 90 | 100 | 110 | 120 (%)
+  reduceMotion: boolean;
+  timeFormat24h: boolean;
+  compactMessageList: boolean;
+  showAvatarsInChat: boolean;
+  sendOnEnter: boolean;
+
+  // Sound & Notifications
+  soundEnabled: boolean;
+  soundVolume: number; // 0..1
+  soundOutgoing: boolean;
+  soundIncoming: boolean;
+
+  // Security & Encryption
+  e2eeEnabled: boolean;
+  customChatKeys?: Record<string, string>; // custom passphrase per chatId if user sets one
+  hideOnlineStatus: boolean;
+}
+
+export const DEFAULT_APP_SETTINGS: AppSettings = {
+  uiScale: 100,
+  reduceMotion: false,
+  timeFormat24h: true,
+  compactMessageList: false,
+  showAvatarsInChat: true,
+  sendOnEnter: true,
+  soundEnabled: true,
+  soundVolume: 0.6,
+  soundOutgoing: true,
+  soundIncoming: true,
+  e2eeEnabled: true,
+  customChatKeys: {},
+  hideOnlineStatus: false,
+};
+

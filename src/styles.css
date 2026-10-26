@@ -2653,3 +2653,675 @@ body,
   color: var(--kolo-text-secondary);
   font-size: 13px;
 }
+
+/* ==========================================================================
+   KOLO APPLICATION SETTINGS MODAL & CONTROLS
+   ========================================================================== */
+.kolo-settings-modal {
+  display: flex;
+  flex-direction: column;
+  max-height: 88vh;
+  overflow: hidden;
+  border-radius: 20px;
+}
+
+.kolo-settings-header-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: rgba(var(--kolo-accent-rgb), 0.18);
+  color: var(--kolo-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.kolo-settings-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--kolo-border-color);
+  background: rgba(0, 0, 0, 0.2);
+  overflow-x: auto;
+}
+
+.kolo-settings-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--kolo-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.kolo-settings-tab-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--kolo-text-primary);
+}
+
+.kolo-settings-tab-btn.active {
+  background: rgba(var(--kolo-accent-rgb), 0.18);
+  border-color: rgba(var(--kolo-accent-rgb), 0.35);
+  color: var(--kolo-accent);
+  font-weight: 600;
+}
+
+.kolo-settings-body {
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.kolo-settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.kolo-setting-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--kolo-border-color);
+  border-radius: 14px;
+}
+
+.kolo-setting-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--kolo-border-color);
+  border-radius: 14px;
+}
+
+.kolo-setting-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.kolo-setting-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--kolo-text-primary);
+}
+
+.kolo-setting-desc {
+  font-size: 12px;
+  color: var(--kolo-text-secondary);
+  line-height: 1.45;
+}
+
+/* UI Scale Buttons */
+.kolo-scale-buttons {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.kolo-scale-btn {
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--kolo-border-color);
+  color: var(--kolo-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.kolo-scale-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.kolo-scale-btn.active {
+  background: var(--kolo-accent);
+  color: #fff;
+  border-color: var(--kolo-accent);
+  box-shadow: 0 0 16px rgba(var(--kolo-accent-rgb), 0.4);
+}
+
+/* Switches */
+.kolo-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.kolo-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.kolo-switch-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 24px;
+  transition: 0.25s ease;
+  border: 1px solid var(--kolo-border-color);
+}
+
+.kolo-switch-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 2px;
+  bottom: 2px;
+  background: #fff;
+  border-radius: 50%;
+  transition: 0.25s ease;
+}
+
+.kolo-switch input:checked + .kolo-switch-slider {
+  background: var(--kolo-accent);
+  border-color: var(--kolo-accent);
+}
+
+.kolo-switch input:checked + .kolo-switch-slider:before {
+  transform: translateX(20px);
+}
+
+/* Sound Sliders */
+.kolo-slider-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.kolo-slider-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--kolo-accent);
+}
+
+.kolo-sound-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.kolo-test-sound-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--kolo-border-color);
+  color: var(--kolo-text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.kolo-test-sound-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.kolo-row-btn-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.kolo-subtle-btn {
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--kolo-border-color);
+  color: var(--kolo-text-secondary);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.kolo-subtle-btn:hover {
+  color: var(--kolo-text-primary);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* Setting Highlight Banner */
+.kolo-setting-card-highlight {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(var(--kolo-accent-rgb), 0.15), rgba(0, 0, 0, 0.35));
+  border: 1px solid rgba(var(--kolo-accent-rgb), 0.3);
+}
+
+.kolo-setting-highlight-body {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.kolo-setting-highlight-body h4 {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 4px 0;
+  color: var(--kolo-text-primary);
+}
+
+.kolo-setting-highlight-body p {
+  font-size: 12px;
+  color: var(--kolo-text-secondary);
+  margin: 0;
+  line-height: 1.45;
+}
+
+/* Security & E2EE */
+.kolo-security-banner {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.kolo-security-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.kolo-security-banner-info h4 {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #34d399;
+  margin: 0 0 4px 0;
+}
+
+.kolo-security-banner-info p {
+  font-size: 12px;
+  color: var(--kolo-text-secondary);
+  margin: 0;
+  line-height: 1.45;
+}
+
+.kolo-setting-box {
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--kolo-border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kolo-setting-box-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--kolo-text-primary);
+}
+
+.kolo-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  align-self: flex-start;
+}
+
+.kolo-status-pill.ok {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.kolo-danger-zone {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.kolo-danger-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 10px;
+  background: rgba(239, 68, 68, 0.85);
+  color: #fff;
+  border: none;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  align-self: flex-start;
+  transition: background 0.2s;
+}
+
+.kolo-danger-btn:hover {
+  background: #dc2626;
+}
+
+.kolo-confirm-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* About Screen */
+.kolo-about-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 10px 0;
+}
+
+.kolo-about-logo {
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, var(--kolo-accent), var(--kolo-accent-secondary, #6366f1));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  box-shadow: 0 8px 24px rgba(var(--kolo-accent-rgb), 0.35);
+  margin-bottom: 12px;
+}
+
+.kolo-about-card h3 {
+  font-size: 19px;
+  margin: 0 0 6px 0;
+  color: var(--kolo-text-primary);
+}
+
+.kolo-version-tag {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  background: rgba(var(--kolo-accent-rgb), 0.15);
+  color: var(--kolo-accent);
+  font-size: 11.5px;
+  font-weight: 700;
+  margin-bottom: 14px;
+}
+
+.kolo-about-text {
+  font-size: 13px;
+  color: var(--kolo-text-secondary);
+  line-height: 1.55;
+  max-width: 480px;
+  margin: 0 0 20px 0;
+}
+
+.kolo-about-specs {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--kolo-border-color);
+  text-align: left;
+}
+
+.kolo-spec-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+
+.kolo-spec-row span {
+  color: var(--kolo-text-secondary);
+}
+
+.kolo-spec-row strong {
+  color: var(--kolo-text-primary);
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   E2EE HEADER PILL & MESSAGE INDICATORS
+   ========================================================================== */
+.kolo-e2ee-header-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 20px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #34d399;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.kolo-e2ee-header-pill:hover {
+  background: rgba(16, 185, 129, 0.22);
+  border-color: #34d399;
+  transform: translateY(-1px);
+}
+
+.kolo-e2ee-icon {
+  color: #10b981;
+}
+
+.kolo-msg-e2ee-tag {
+  display: inline-flex;
+  align-items: center;
+  color: rgba(52, 211, 153, 0.85);
+  margin-right: 2px;
+}
+
+/* ==========================================================================
+   SAFETY VERIFICATION MODAL
+   ========================================================================== */
+.kolo-safety-modal {
+  border-radius: 20px;
+}
+
+.kolo-safety-icon-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(16, 185, 129, 0.18);
+  color: #10b981;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.kolo-safety-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.kolo-safety-verified-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #34d399;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.kolo-safety-desc {
+  font-size: 12.5px;
+  color: var(--kolo-text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.kolo-fingerprint-emoji-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--kolo-border-color);
+  gap: 6px;
+}
+
+.kolo-fingerprint-emojis {
+  font-size: 28px;
+  letter-spacing: 4px;
+}
+
+.kolo-fingerprint-subtitle {
+  font-size: 11px;
+  color: var(--kolo-text-secondary);
+}
+
+.kolo-safety-number-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--kolo-border-color);
+}
+
+.kolo-safety-num-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--kolo-text-secondary);
+}
+
+.kolo-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--kolo-border-color);
+  color: var(--kolo-text-primary);
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.kolo-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.kolo-safety-code-digits {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--kolo-accent);
+  text-align: center;
+  padding: 8px 0;
+  word-spacing: 8px;
+  line-height: 1.6;
+}
+
+.kolo-safety-num-hint {
+  font-size: 11.5px;
+  color: var(--kolo-text-secondary);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.kolo-psk-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--kolo-border-color);
+}
+
+.kolo-psk-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--kolo-text-primary);
+}
+
+.kolo-psk-hint {
+  font-size: 11.5px;
+  color: var(--kolo-text-secondary);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.kolo-psk-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+/* Compact Message Stream */
+.kolo-messages-viewport.compact-messages {
+  gap: 3px;
+}
+
+.kolo-messages-viewport.compact-messages .kolo-msg-row {
+  margin-bottom: 2px;
+}
+
+.kolo-messages-viewport.compact-messages .kolo-bubble {
+  padding: 6px 10px;
+}
+
+/* Reduce Motion Mode */
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation-duration: 0.001s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001s !important;
+}
+

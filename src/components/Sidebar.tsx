@@ -26,6 +26,7 @@ interface SidebarProps {
   onStartDmWithUser: (targetUser: User) => void;
   onOpenCreateModal: () => void;
   onOpenProfileModal: () => void;
+  onOpenSettingsModal?: () => void;
   onOpenAdminPanel?: () => void;
   onLogout: () => void;
   onToggleStudio: () => void;
@@ -46,6 +47,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onStartDmWithUser,
   onOpenCreateModal,
   onOpenProfileModal,
+  onOpenSettingsModal,
   onOpenAdminPanel,
   onLogout,
   onToggleStudio,
@@ -167,6 +169,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             <Plus size={19} />
           </button>
+          {onOpenSettingsModal && (
+            <button
+              type="button"
+              className="kolo-icon-btn"
+              onClick={onOpenSettingsModal}
+              title="Налаштування додатку"
+            >
+              <Settings size={18} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -377,7 +389,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </strong>
             <span>@{currentUser.username} • Профіль</span>
           </div>
-          <Settings size={16} className="kolo-switch-icon" />
+          {onOpenSettingsModal ? (
+            <button
+              type="button"
+              className="kolo-icon-btn"
+              style={{ width: 28, height: 28 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenSettingsModal();
+              }}
+              title="Налаштування додатку"
+            >
+              <Settings size={15} />
+            </button>
+          ) : (
+            <Settings size={16} className="kolo-switch-icon" />
+          )}
           <button
             type="button"
             className="kolo-icon-btn"

@@ -9,22 +9,27 @@ import {
   Edit3,
   FileText,
   Info,
+  Lock,
   Mic,
   Palette,
   Paperclip,
   Pin,
   Search,
   Send,
+  Shield,
   Smile,
   Sparkles,
   Trash2,
   UserPlus,
   X,
 } from 'lucide-react';
-import { Chat, Message, MessageAttachment, ThemeConfig, User } from '../types/messenger';
+import { AppSettings, Chat, Message, MessageAttachment, ThemeConfig, User } from '../types/messenger';
 import { LiveVoiceRecorder } from '../utils/audioRecorder';
+import { decryptE2EEMessage, encryptE2EEMessage, isEncryptedMessage } from '../utils/cryptoE2EE';
+import { playSentSound } from '../utils/soundEffects';
 import { Avatar } from './Avatar';
 import { LiveBackground } from './LiveBackground';
+import { SafetyVerificationModal } from './SafetyVerificationModal';
 import { VoiceMessagePlayer } from './VoiceMessagePlayer';
 
 interface ChatViewProps {
@@ -34,8 +39,10 @@ interface ChatViewProps {
   messages: Message[];
   typingUserIds: string[];
   theme: ThemeConfig;
+  settings?: AppSettings;
   studioOpen: boolean;
   infoOpen: boolean;
+  onUpdateSettings?: (newSettings: Partial<AppSettings>) => void;
   onSendMessage: (
     text: string,
     replyToId?: string,
@@ -73,8 +80,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
   messages,
   typingUserIds,
   theme,
+  settings,
   studioOpen,
   infoOpen,
+  onUpdateSettings,
   onSendMessage,
   onEditMessage,
   onDeleteMessage,
@@ -97,6 +106,35 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [safetyModalOpen, setSafetyModalOpen] = useState(false);
+
+  // E2EE Decrypted messages cache (in-memory only, zero server exposure)
+  const [decryptedMap, setDecryptedMap] = useState<Record<string, string>>({});
+  const customPassphrase = settings?.customChatKeys?.[chat.id];
+
+  useEffect(() => {
+    let isCancelled = false;
+    const decryptAll = async () => {
+      const updates: Record<string, string> = {};
+      let hasNew = false;
+      for (const m of messages) {
+        if (m.text && isEncryptedMessage(m.text)) {
+          if (!decryptedMap[m.id]) {
+            const dec = await decryptE2EEMessage(m.text, chat.id, customPassphrase);
+            updates[m.id] = dec;
+            hasNew = true;
+          }
+        }
+      }
+      if (hasNew && !isCancelled) {
+        setDecryptedMap((prev) => ({ ...prev, ...updates }));
+      }
+    };
+    decryptAll();
+    return () => {
+      isCancelled = true;
+    };
+  }, [messages, chat.id, customPassphrase]);
 
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -197,16 +235,24 @@ export const ChatView: React.FC<ChatViewProps> = ({
     }, 1800);
   };
 
-  const handleSubmit = (e?: React.FormEvent) => {
+  const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const trimmed = text.trim();
     if (!trimmed) return;
 
+    const shouldEncrypt = settings ? settings.e2eeEnabled : true;
+    const finalPayload = shouldEncrypt
+      ? await encryptE2EEMessage(trimmed, chat.id, customPassphrase)
+      : trimmed;
+
     if (editingMsg) {
-      onEditMessage(editingMsg.id, trimmed);
+      onEditMessage(editingMsg.id, finalPayload);
       setEditingMsg(null);
     } else {
-      onSendMessage(trimmed, replyTo?.id);
+      onSendMessage(finalPayload, replyTo?.id);
+      if (settings?.soundEnabled && settings?.soundOutgoing) {
+        playSentSound(settings.soundVolume);
+      }
       setReplyTo(null);
     }
     setText('');
@@ -215,9 +261,17 @@ export const ChatView: React.FC<ChatViewProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit();
+    const enterSends = settings?.sendOnEnter !== false;
+    if (enterSends) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSubmit();
+      }
+    } else {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        handleSubmit();
+      }
     }
   };
 
@@ -228,13 +282,22 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
     const uploaded = await onUploadFile(file);
     const isImage = uploaded.mimeType.startsWith('image/');
-    onSendMessage(text.trim(), replyTo?.id, {
+    const trimmed = text.trim();
+    const shouldEncrypt = settings ? settings.e2eeEnabled : true;
+    const finalPayload = trimmed && shouldEncrypt
+      ? await encryptE2EEMessage(trimmed, chat.id, customPassphrase)
+      : trimmed;
+
+    onSendMessage(finalPayload, replyTo?.id, {
       type: isImage ? 'image' : 'file',
       url: uploaded.url,
       name: uploaded.name,
       size: uploaded.size,
       mimeType: uploaded.mimeType,
     });
+    if (settings?.soundEnabled && settings?.soundOutgoing) {
+      playSentSound(settings.soundVolume);
+    }
     setText('');
     setReplyTo(null);
   };
@@ -313,6 +376,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
     return new Date(iso).toLocaleTimeString('uk-UA', {
       hour: '2-digit',
       minute: '2-digit',
+      hour12: settings?.timeFormat24h === false,
     });
   };
 
@@ -364,6 +428,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
         </div>
 
         <div className="kolo-chat-header-actions">
+          <button
+            type="button"
+            className="kolo-e2ee-header-pill"
+            onClick={() => setSafetyModalOpen(true)}
+            title="Наскрізне шифрування (E2EE) активне • Натисніть для перевірки коду безпеки"
+          >
+            <Shield size={14} className="kolo-e2ee-icon" />
+            <span>E2EE Захищено</span>
+          </button>
           <button
             type="button"
             className={`kolo-icon-btn ${searchOpen ? 'active' : ''}`}
@@ -445,8 +518,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
       )}
 
       {/* Messages Stream */}
-      <div className="kolo-messages-viewport">
-        <div className="kolo-date-pill">Сьогодні • Захищено KOLO Realtime</div>
+      <div className={`kolo-messages-viewport ${settings?.compactMessageList ? 'compact-messages' : ''}`}>
+        <div className="kolo-date-pill">Сьогодні • Захищено KOLO Realtime (E2EE)</div>
 
         {filteredMessages.map((msg) => {
           if (msg.isSystem) {
@@ -480,7 +553,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 setActiveMenuMsgId(showMenu ? null : msg.id);
               }}
             >
-              {!isOwn && chat.type !== 'dm' && sender && (
+              {!isOwn && chat.type !== 'dm' && sender && settings?.showAvatarsInChat !== false && (
                 <div className="kolo-msg-avatar">
                   <Avatar
                     title={sender.displayName}
@@ -636,7 +709,13 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 )}
 
                 {/* Message Text */}
-                {msg.text && <div className="kolo-bubble-text">{msg.text}</div>}
+                {msg.text && (
+                  <div className="kolo-bubble-text">
+                    {isEncryptedMessage(msg.text)
+                      ? (decryptedMap[msg.id] ?? '🔒 Розшифрування...')
+                      : msg.text}
+                  </div>
+                )}
 
                 {/* Reactions + Meta Footer */}
                 <div className="kolo-bubble-footer">
@@ -663,6 +742,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   )}
 
                   <div className="kolo-bubble-meta">
+                    {isEncryptedMessage(msg.text) && (
+                      <span className="kolo-msg-e2ee-tag" title="Наскрізне шифрування AES-256-GCM (Zero-Knowledge)">
+                        <Lock size={11} />
+                      </span>
+                    )}
                     {msg.editedAt && <span className="kolo-edited-tag">ред.</span>}
                     <span className="kolo-msg-time">{formatTime(msg.createdAt)}</span>
                     {isOwn && (
@@ -960,6 +1044,27 @@ export const ChatView: React.FC<ChatViewProps> = ({
             <img src={lightboxImage} alt="Preview" />
           </div>
         </div>
+      )}
+
+      {/* E2EE Safety Verification Modal */}
+      {safetyModalOpen && (
+        <SafetyVerificationModal
+          chat={chat}
+          currentUser={currentUser}
+          customPassphrase={settings?.customChatKeys?.[chat.id] || ''}
+          onSetCustomPassphrase={(psk) => {
+            if (onUpdateSettings) {
+              onUpdateSettings({
+                customChatKeys: {
+                  ...(settings?.customChatKeys || {}),
+                  [chat.id]: psk,
+                },
+              });
+            }
+            setDecryptedMap({});
+          }}
+          onClose={() => setSafetyModalOpen(false)}
+        />
       )}
     </main>
   );

@@ -217,6 +217,11 @@ function loadDatabase(): DatabaseSchema {
         }
       }
 
+      // Auto-prune any orphaned groups with 0 members
+      parsed.chats = parsed.chats.filter(
+        (c) => c.id === 'c_global' || (c.memberIds && c.memberIds.length > 0)
+      );
+
       const validChatIds = new Set(parsed.chats.map((c) => c.id));
       parsed.messages = (parsed.messages || []).filter(
         (m) =>
@@ -244,6 +249,25 @@ function saveDatabase(data: DatabaseSchema = db): void {
   } catch (err) {
     console.error('Failed saving DB:', err);
   }
+}
+
+// Automatically purge groups and channels when 0 members remain
+function pruneEmptyChats(): boolean {
+  const empty = db.chats.filter(
+    (c) => c.id !== 'c_global' && (!c.memberIds || c.memberIds.length === 0)
+  );
+  if (empty.length > 0) {
+    const emptyIds = new Set(empty.map((c) => c.id));
+    db.chats = db.chats.filter((c) => !emptyIds.has(c.id));
+    db.messages = db.messages.filter((m) => !emptyIds.has(m.chatId));
+    saveDatabase();
+    io.emit('chats:update', db.chats);
+    for (const emptyId of emptyIds) {
+      io.emit('chat:deleted', { chatId: emptyId });
+    }
+    return true;
+  }
+  return false;
 }
 
 function getAuthUserFromRequest(req: express.Request): StoredUser | null {
@@ -625,6 +649,18 @@ app.post('/api/chats/:chatId/leave', (req, res) => {
     return;
   }
   chat.memberIds = chat.memberIds.filter((id) => id !== authUser.id);
+
+  // If the chat has 0 members left and is not the global lobby, automatically delete it and its messages!
+  if (chat.id !== 'c_global' && chat.memberIds.length === 0) {
+    db.chats = db.chats.filter((c) => c.id !== chat.id);
+    db.messages = db.messages.filter((m) => m.chatId !== chat.id);
+    saveDatabase();
+    io.emit('chats:update', db.chats);
+    io.emit('chat:deleted', { chatId: chat.id });
+    res.json({ ok: true, deleted: true });
+    return;
+  }
+
   saveDatabase();
   io.emit('chats:update', db.chats);
   res.json({ ok: true });
@@ -798,6 +834,9 @@ app.delete('/api/admin/users/:userId', requireAdmin, (req, res) => {
   db.chats = db.chats.filter(
     (c) => !(c.type === 'dm' && c.memberIds.length < 2)
   );
+
+  // Prune any non-global groups that now have 0 members
+  pruneEmptyChats();
 
   saveDatabase();
   io.emit('users:update', db.users.map(sanitizeUser));

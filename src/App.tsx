@@ -5,20 +5,25 @@ import { AdminPanel } from './components/AdminPanel';
 import { ChatView } from './components/ChatView';
 import { CustomizationStudio } from './components/CustomizationStudio';
 import { ChatInfoPanel, CreateChatModal, ProfileModal } from './components/Modals';
+import { SettingsModal } from './components/SettingsModal';
 import { Sidebar } from './components/Sidebar';
 import { applyThemeToDocument, THEME_PRESETS } from './themes/presets';
 import {
+  AppSettings,
   AuthSession,
   Chat,
   ChatType,
+  DEFAULT_APP_SETTINGS,
   Message,
   MessageAttachment,
   ThemeConfig,
   User,
 } from './types/messenger';
+import { playReceivedSound } from './utils/soundEffects';
 
 const STORAGE_THEME_KEY = 'kolo_active_theme_v1';
 const STORAGE_PRESETS_KEY = 'kolo_custom_presets_v1';
+const STORAGE_SETTINGS_KEY = 'kolo_app_settings_v1';
 const SESSION_TOKEN_KEY = 'kolo_auth_token_session';
 const LOCAL_TOKEN_KEY = 'kolo_auth_token_local';
 
@@ -44,8 +49,20 @@ export const App: React.FC = () => {
   const [createModalOpen, setCreateModalOpen] = useState<boolean>(false);
   const [profileModalOpen, setProfileModalOpen] = useState<boolean>(false);
   const [adminPanelOpen, setAdminPanelOpen] = useState<boolean>(false);
+  const [settingsModalOpen, setSettingsModalOpen] = useState<boolean>(false);
   const [mobileChatOpen, setMobileChatOpen] = useState<boolean>(true);
   const [toastText, setToastText] = useState<string | null>(null);
+
+  // App Settings State (Visual, Sound, E2EE, Privacy)
+  const [settings, setSettings] = useState<AppSettings>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_SETTINGS_KEY);
+      if (saved) return { ...DEFAULT_APP_SETTINGS, ...JSON.parse(saved) };
+    } catch {
+      // ignore
+    }
+    return DEFAULT_APP_SETTINGS;
+  });
 
   // Theme State
   const [theme, setTheme] = useState<ThemeConfig>(() => {
@@ -77,6 +94,22 @@ export const App: React.FC = () => {
       setToastText((prev) => (prev === msg ? null : prev));
     }, 2800);
   };
+
+  // Sync settings with document root and local storage
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_SETTINGS_KEY, JSON.stringify(settings));
+    } catch {
+      // ignore
+    }
+    // Apply UI scale
+    document.documentElement.style.fontSize = `${(settings.uiScale / 100) * 16}px`;
+    if (settings.reduceMotion) {
+      document.documentElement.classList.add('reduce-motion');
+    } else {
+      document.documentElement.classList.remove('reduce-motion');
+    }
+  }, [settings]);
 
   // Apply theme CSS variables and cloud-sync to user profile
   useEffect(() => {
@@ -193,6 +226,16 @@ export const App: React.FC = () => {
         if (prev.some((m) => m.id === msg.id)) return prev;
         return [...prev, msg];
       });
+      if (msg.senderId !== currentUser?.id && settings.soundEnabled && settings.soundIncoming) {
+        playReceivedSound(settings.soundVolume);
+      }
+    });
+
+    socket.on('chat:deleted', (payload: { chatId: string }) => {
+      setChats((prev) => prev.filter((c) => c.id !== payload.chatId));
+      setMessages((prev) => prev.filter((m) => m.chatId !== payload.chatId));
+      setActiveChatId((curr) => (curr === payload.chatId ? 'c_global' : curr));
+      showToast('Групу було автоматично видалено, оскільки в ній не залишилося учасників');
     });
 
     socket.on('message:updated', (updated: Message) => {
@@ -520,6 +563,24 @@ export const App: React.FC = () => {
     showToast('Профіль успішно оновлено!');
   };
 
+  const handleUpdateSettings = (newSettings: Partial<AppSettings>) => {
+    setSettings((prev) => ({ ...prev, ...newSettings }));
+    showToast('Налаштування збережено');
+  };
+
+  const handleClearLocalCache = () => {
+    try {
+      localStorage.removeItem(STORAGE_SETTINGS_KEY);
+      localStorage.removeItem(STORAGE_THEME_KEY);
+      localStorage.removeItem(STORAGE_PRESETS_KEY);
+      sessionStorage.clear();
+    } catch {
+      // ignore
+    }
+    showToast('Кеш успішно очищено! Перезавантаження...');
+    setTimeout(() => window.location.reload(), 1000);
+  };
+
   if (authChecking) {
     return null;
   }
@@ -562,6 +623,7 @@ export const App: React.FC = () => {
         }}
         onOpenCreateModal={() => setCreateModalOpen(true)}
         onOpenProfileModal={() => setProfileModalOpen(true)}
+        onOpenSettingsModal={() => setSettingsModalOpen(true)}
         onOpenAdminPanel={() => setAdminPanelOpen(true)}
         onLogout={handleLogout}
         onToggleStudio={() => setStudioOpen((v) => !v)}
@@ -575,8 +637,10 @@ export const App: React.FC = () => {
           messages={activeMessages}
           typingUserIds={typingByChat[activeChat.id] || []}
           theme={theme}
+          settings={settings}
           studioOpen={studioOpen}
           infoOpen={infoOpen}
+          onUpdateSettings={handleUpdateSettings}
           onSendMessage={handleSendMessage}
           onEditMessage={handleEditMessage}
           onDeleteMessage={handleDeleteMessage}
@@ -635,6 +699,20 @@ export const App: React.FC = () => {
           onUploadFile={uploadFileToServer}
           onLogout={handleLogout}
           onClose={() => setProfileModalOpen(false)}
+        />
+      )}
+
+      {settingsModalOpen && (
+        <SettingsModal
+          settings={settings}
+          theme={theme}
+          onUpdateSettings={handleUpdateSettings}
+          onOpenStudio={() => {
+            setSettingsModalOpen(false);
+            setStudioOpen(true);
+          }}
+          onClearLocalCache={handleClearLocalCache}
+          onClose={() => setSettingsModalOpen(false)}
         />
       )}
 
