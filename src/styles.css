@@ -2378,3 +2378,278 @@ body,
     text-align: center;
   }
 }
+
+
+/* ==========================================
+   Admin Panel & Management Styles
+   ========================================== */
+.kolo-admin-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  border-radius: 10px;
+  border: 1px solid rgba(244, 63, 94, 0.45);
+  background: rgba(244, 63, 94, 0.14);
+  color: #fda4af;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 12px rgba(244, 63, 94, 0.25);
+}
+
+.kolo-admin-trigger:hover {
+  background: linear-gradient(135deg, #f43f5e, #e11d48);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 0 16px rgba(244, 63, 94, 0.55);
+}
+
+.kolo-admin-modal {
+  max-width: 780px !important;
+  width: 95% !important;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 20px 24px !important;
+}
+
+.kolo-admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.kolo-admin-header-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.kolo-admin-badge-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f43f5e, #be123c);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 16px rgba(244, 63, 94, 0.4);
+}
+
+.kolo-admin-header-title h3 {
+  font-size: 17px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.kolo-admin-header-title span {
+  font-size: 11.5px;
+  color: var(--kolo-text-secondary);
+}
+
+.kolo-admin-pill-tag {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(244, 63, 94, 0.2);
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  color: #fb7185;
+  letter-spacing: 0.05em;
+}
+
+.kolo-admin-content-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 340px;
+  max-height: 60vh;
+}
+
+.kolo-admin-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 4px 0;
+}
+
+@media (max-width: 640px) {
+  .kolo-admin-overview-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.kolo-stat-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--kolo-border-color);
+}
+
+.kolo-stat-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.kolo-stat-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.kolo-stat-info strong {
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.kolo-stat-info span {
+  font-size: 11px;
+  color: var(--kolo-text-secondary);
+}
+
+.kolo-admin-tab-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.kolo-admin-pane-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.kolo-admin-table-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.kolo-admin-user-row,
+.kolo-admin-chat-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 13px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--kolo-border-color);
+  transition: all 0.15s ease;
+}
+
+.kolo-admin-user-row.banned {
+  background: rgba(244, 63, 94, 0.08);
+  border-color: rgba(244, 63, 94, 0.3);
+}
+
+.kolo-admin-user-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.kolo-admin-user-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  flex-wrap: wrap;
+}
+
+.kolo-admin-user-sub {
+  font-size: 11.5px;
+  color: var(--kolo-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kolo-role-badge {
+  font-size: 9px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--kolo-text-secondary);
+  letter-spacing: 0.04em;
+}
+
+.kolo-role-badge.admin {
+  background: rgba(244, 63, 94, 0.25);
+  color: #fda4af;
+  border: 1px solid rgba(244, 63, 94, 0.4);
+}
+
+.kolo-role-badge.banned {
+  background: rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+}
+
+.kolo-role-badge.online {
+  background: rgba(16, 185, 129, 0.25);
+  color: #6ee7b7;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.kolo-master-admin-tag {
+  font-size: 10px;
+  font-weight: 800;
+  color: #f43f5e;
+  padding: 4px 8px;
+  background: rgba(244, 63, 94, 0.15);
+  border-radius: 6px;
+}
+
+.kolo-admin-user-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.kolo-admin-inline-box {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--kolo-border-color);
+}
+
+.kolo-admin-broadcast-banner {
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(var(--kolo-accent-rgb), 0.12);
+  border: 1px solid var(--kolo-border-color);
+  font-size: 13px;
+}
+
+.kolo-admin-broadcast-banner p {
+  font-size: 12px;
+  color: var(--kolo-text-secondary);
+  margin-top: 2px;
+}
+
+.kolo-admin-empty-state {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--kolo-text-secondary);
+  font-size: 13px;
+}

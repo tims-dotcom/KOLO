@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { AuthScreen } from './components/AuthScreen';
+import { AdminPanel } from './components/AdminPanel';
 import { ChatView } from './components/ChatView';
 import { CustomizationStudio } from './components/CustomizationStudio';
 import { ChatInfoPanel, CreateChatModal, ProfileModal } from './components/Modals';
@@ -42,6 +43,7 @@ export const App: React.FC = () => {
   const [infoOpen, setInfoOpen] = useState<boolean>(false);
   const [createModalOpen, setCreateModalOpen] = useState<boolean>(false);
   const [profileModalOpen, setProfileModalOpen] = useState<boolean>(false);
+  const [adminPanelOpen, setAdminPanelOpen] = useState<boolean>(false);
   const [mobileChatOpen, setMobileChatOpen] = useState<boolean>(true);
   const [toastText, setToastText] = useState<string | null>(null);
 
@@ -231,6 +233,15 @@ export const App: React.FC = () => {
         });
       }
     );
+
+    socket.on('admin:broadcast', (payload: { text: string }) => {
+      showToast(`📢 Оголошення: ${payload.text}`);
+    });
+
+    socket.on('auth:error', (payload: { message: string }) => {
+      showToast(payload.message || 'Помилка авторизації');
+      handleLogout();
+    });
 
     return () => {
       socket.disconnect();
@@ -551,6 +562,7 @@ export const App: React.FC = () => {
         }}
         onOpenCreateModal={() => setCreateModalOpen(true)}
         onOpenProfileModal={() => setProfileModalOpen(true)}
+        onOpenAdminPanel={() => setAdminPanelOpen(true)}
         onLogout={handleLogout}
         onToggleStudio={() => setStudioOpen((v) => !v)}
       />
@@ -623,6 +635,15 @@ export const App: React.FC = () => {
           onUploadFile={uploadFileToServer}
           onLogout={handleLogout}
           onClose={() => setProfileModalOpen(false)}
+        />
+      )}
+
+      {adminPanelOpen && currentUser.role === 'admin' && token && (
+        <AdminPanel
+          token={token}
+          currentUser={currentUser}
+          onClose={() => setAdminPanelOpen(false)}
+          onShowToast={showToast}
         />
       )}
 

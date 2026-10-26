@@ -96,8 +96,26 @@ const FAKE_USER_IDS = new Set(['u_you', 'u_olena', 'u_maksym', 'u_bot']);
 const FAKE_CHAT_IDS = new Set(['c_studio', 'c_olena', 'c_bot', 'c_news']);
 
 function createEmptyDatabase(): DatabaseSchema {
+  const adminUser: StoredUser = {
+    id: 'u_admin_master',
+    username: 'admin',
+    email: 'admin@kolo.app',
+    displayName: 'KOLO Admin 🛡️',
+    avatarColor: '#f43f5e',
+    avatarEmoji: '🛡️',
+    statusEmoji: '⚡',
+    bio: 'Головний адміністратор KOLO Messenger',
+    role: 'admin',
+    isBanned: false,
+    online: false,
+    lastSeen: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+    passwordHash: hashPassword('AdminKolo2026!'),
+    savedTheme: THEME_PRESETS[0],
+    savedPresets: [],
+  };
   return {
-    users: [],
+    users: [adminUser],
     chats: [
       {
         id: 'c_global',
@@ -107,7 +125,7 @@ function createEmptyDatabase(): DatabaseSchema {
         description: 'Загальний публічний чат для всіх учасників KOLO Messenger.',
         avatarColor: '#6366f1',
         avatarEmoji: '⚡',
-        memberIds: [],
+        memberIds: ['u_admin_master'],
         isPublic: true,
         createdAt: new Date().toISOString(),
       },
@@ -126,6 +144,37 @@ function loadDatabase(): DatabaseSchema {
       parsed.users = (parsed.users || []).filter(
         (u) => !FAKE_USER_IDS.has(u.id) && !u.isBot
       );
+
+      // Ensure Master Admin account exists
+      let adminUser = parsed.users.find((u) => u.username === 'admin');
+      if (!adminUser) {
+        adminUser = {
+          id: 'u_admin_master',
+          username: 'admin',
+          email: 'admin@kolo.app',
+          displayName: 'KOLO Admin 🛡️',
+          avatarColor: '#f43f5e',
+          avatarEmoji: '🛡️',
+          statusEmoji: '⚡',
+          bio: 'Головний адміністратор KOLO Messenger',
+          role: 'admin',
+          isBanned: false,
+          online: false,
+          lastSeen: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          passwordHash: hashPassword('AdminKolo2026!'),
+          savedTheme: THEME_PRESETS[0],
+          savedPresets: [],
+        };
+        parsed.users.unshift(adminUser);
+      } else {
+        adminUser.role = 'admin';
+        adminUser.isBanned = false;
+        if (!adminUser.passwordHash) {
+          adminUser.passwordHash = hashPassword('AdminKolo2026!');
+        }
+      }
+
       const validUserIds = new Set(parsed.users.map((u) => u.id));
 
       // Remove demo chats and clean memberIds
@@ -342,6 +391,11 @@ app.post('/api/auth/login', (req, res) => {
 
   if (!user || !verifyPassword(String(password || ''), user.passwordHash)) {
     res.status(401).json({ error: 'Невірний @username / email або пароль' });
+    return;
+  }
+
+  if (user.isBanned) {
+    res.status(403).json({ error: 'Ваш акаунт заблоковано адміністрацією' });
     return;
   }
 
@@ -616,6 +670,200 @@ app.post('/api/upload', (req, res) => {
   }
 });
 
+// Admin Middleware & Endpoints
+function requireAdmin(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction
+) {
+  const user = getAuthUserFromRequest(req);
+  if (!user || user.role !== 'admin' || user.isBanned) {
+    res
+      .status(403)
+      .json({ error: 'Доступ заборонено (потрібні права адміністратора)' });
+    return;
+  }
+  next();
+}
+
+app.get('/api/admin/overview', requireAdmin, (_req, res) => {
+  const onlineCount = db.users.filter((u) => u.online).length;
+  const bannedCount = db.users.filter((u) => u.isBanned).length;
+  const adminCount = db.users.filter((u) => u.role === 'admin').length;
+  res.json({
+    totalUsers: db.users.length,
+    onlineUsers: onlineCount,
+    bannedUsers: bannedCount,
+    adminUsers: adminCount,
+    totalChats: db.chats.length,
+    totalMessages: db.messages.length,
+    uptimeSec: Math.floor(process.uptime()),
+  });
+});
+
+app.get('/api/admin/users', requireAdmin, (_req, res) => {
+  const usersWithStats = db.users.map((u) => ({
+    ...sanitizeUser(u),
+    isBanned: Boolean(u.isBanned),
+    role: u.role || 'user',
+    messagesCount: db.messages.filter((m) => m.senderId === u.id).length,
+    chatsCount: db.chats.filter((c) => c.memberIds.includes(u.id)).length,
+  }));
+  res.json(usersWithStats);
+});
+
+app.post('/api/admin/users/:userId/toggle-ban', requireAdmin, (req, res) => {
+  const { userId } = req.params;
+  const target = db.users.find((u) => u.id === userId);
+  if (!target) {
+    res.status(404).json({ error: 'Користувача не знайдено' });
+    return;
+  }
+  if (target.id === 'u_admin_master') {
+    res.status(400).json({ error: 'Неможливо заблокувати головного адміністратора' });
+    return;
+  }
+
+  target.isBanned = !target.isBanned;
+  target.online = target.isBanned ? false : target.online;
+  saveDatabase();
+
+  // If user was banned, disconnect their active sockets
+  if (target.isBanned) {
+    for (const [sockId, uid] of socketUsers.entries()) {
+      if (uid === target.id) {
+        const sock = io.sockets.sockets.get(sockId);
+        sock?.emit('auth:error', { message: 'Ваш акаунт було заблоковано адміністрацією' });
+        sock?.disconnect(true);
+      }
+    }
+  }
+
+  io.emit('users:update', db.users.map(sanitizeUser));
+  res.json({ ok: true, isBanned: target.isBanned });
+});
+
+app.post('/api/admin/users/:userId/toggle-role', requireAdmin, (req, res) => {
+  const { userId } = req.params;
+  const target = db.users.find((u) => u.id === userId);
+  if (!target) {
+    res.status(404).json({ error: 'Користувача не знайдено' });
+    return;
+  }
+  if (target.id === 'u_admin_master') {
+    res.status(400).json({ error: 'Неможливо змінити роль головного адміністратора' });
+    return;
+  }
+
+  target.role = target.role === 'admin' ? 'user' : 'admin';
+  saveDatabase();
+  io.emit('users:update', db.users.map(sanitizeUser));
+  res.json({ ok: true, role: target.role });
+});
+
+app.post('/api/admin/users/:userId/reset-password', requireAdmin, (req, res) => {
+  const { userId } = req.params;
+  const { newPassword } = req.body;
+  const target = db.users.find((u) => u.id === userId);
+  if (!target) {
+    res.status(404).json({ error: 'Користувача не знайдено' });
+    return;
+  }
+
+  const pass = String(newPassword || 'kolo123');
+  target.passwordHash = hashPassword(pass);
+  saveDatabase();
+  res.json({ ok: true, message: `Пароль успішно змінено на: ${pass}` });
+});
+
+app.delete('/api/admin/users/:userId', requireAdmin, (req, res) => {
+  const { userId } = req.params;
+  if (userId === 'u_admin_master') {
+    res.status(400).json({ error: 'Неможливо видалити головного адміністратора' });
+    return;
+  }
+
+  const idx = db.users.findIndex((u) => u.id === userId);
+  if (idx === -1) {
+    res.status(404).json({ error: 'Користувача не знайдено' });
+    return;
+  }
+
+  db.users.splice(idx, 1);
+  // Remove user from all chats
+  for (const c of db.chats) {
+    c.memberIds = c.memberIds.filter((id) => id !== userId);
+  }
+  // Delete user's personal DMs
+  db.chats = db.chats.filter(
+    (c) => !(c.type === 'dm' && c.memberIds.length < 2)
+  );
+
+  saveDatabase();
+  io.emit('users:update', db.users.map(sanitizeUser));
+  io.emit('chats:update', db.chats);
+  res.json({ ok: true });
+});
+
+app.get('/api/admin/chats', requireAdmin, (_req, res) => {
+  const chatsWithStats = db.chats.map((c) => ({
+    ...c,
+    messagesCount: db.messages.filter((m) => m.chatId === c.id).length,
+  }));
+  res.json(chatsWithStats);
+});
+
+app.delete('/api/admin/chats/:chatId', requireAdmin, (req, res) => {
+  const { chatId } = req.params;
+  if (chatId === 'c_global') {
+    res.status(400).json({ error: 'Неможливо видалити головний загальний чат' });
+    return;
+  }
+
+  const idx = db.chats.findIndex((c) => c.id === chatId);
+  if (idx === -1) {
+    res.status(404).json({ error: 'Чат не знайдено' });
+    return;
+  }
+
+  db.chats.splice(idx, 1);
+  db.messages = db.messages.filter((m) => m.chatId !== chatId);
+  saveDatabase();
+  io.emit('chats:update', db.chats);
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/broadcast', requireAdmin, (req, res) => {
+  const { text } = req.body;
+  const adminUser = getAuthUserFromRequest(req);
+  if (!text || !text.trim() || !adminUser) {
+    res.status(400).json({ error: 'Текст повідомлення обов’язковий' });
+    return;
+  }
+
+  const broadcastMsg: Message = {
+    id: `m_admin_bcast_${Date.now()}`,
+    chatId: 'c_global',
+    senderId: adminUser.id,
+    text: `🛡️ [ОФІЦІЙНЕ ПОВІДОМЛЕННЯ АДМІНІСТРАЦІЇ]\n\n${text.trim()}`,
+    createdAt: new Date().toISOString(),
+    reactions: [{ emoji: '⚡', userIds: [adminUser.id] }],
+    readBy: [adminUser.id],
+    isSystem: true,
+  };
+
+  db.messages.push(broadcastMsg);
+  saveDatabase();
+  io.emit('message:new', broadcastMsg);
+  io.emit('admin:broadcast', {
+    text: text.trim(),
+    senderName: adminUser.displayName,
+    time: broadcastMsg.createdAt,
+  });
+
+  res.json({ ok: true, message: broadcastMsg });
+});
+
 // Serve built frontend in production if dist exists
 const DIST_DIR = path.join(__dirname, '..', 'dist');
 if (fs.existsSync(DIST_DIR)) {
@@ -640,9 +888,14 @@ io.on('connection', (socket) => {
   const token = socket.handshake.auth?.token as string | undefined;
   const verifiedUserId = verifyToken(token);
   if (verifiedUserId) {
-    socketUsers.set(socket.id, verifiedUserId);
     const user = db.users.find((u) => u.id === verifiedUserId);
     if (user) {
+      if (user.isBanned) {
+        socket.emit('auth:error', { message: 'Ваш акаунт заблоковано' });
+        socket.disconnect(true);
+        return;
+      }
+      socketUsers.set(socket.id, verifiedUserId);
       user.online = true;
       user.lastSeen = new Date().toISOString();
       saveDatabase();
@@ -652,9 +905,14 @@ io.on('connection', (socket) => {
 
   socket.on('auth:identify', (tokenOrUserId: string) => {
     const uid = verifyToken(tokenOrUserId) || tokenOrUserId;
-    socketUsers.set(socket.id, uid);
     const user = db.users.find((u) => u.id === uid);
     if (user) {
+      if (user.isBanned) {
+        socket.emit('auth:error', { message: 'Ваш акаунт заблоковано' });
+        socket.disconnect(true);
+        return;
+      }
+      socketUsers.set(socket.id, uid);
       user.online = true;
       user.lastSeen = new Date().toISOString();
       saveDatabase();

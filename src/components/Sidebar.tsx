@@ -6,6 +6,7 @@ import {
   Plus,
   Search,
   Settings,
+  Shield,
   Users,
   X,
 } from 'lucide-react';
@@ -25,6 +26,7 @@ interface SidebarProps {
   onStartDmWithUser: (targetUser: User) => void;
   onOpenCreateModal: () => void;
   onOpenProfileModal: () => void;
+  onOpenAdminPanel?: () => void;
   onLogout: () => void;
   onToggleStudio: () => void;
 }
@@ -44,6 +46,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onStartDmWithUser,
   onOpenCreateModal,
   onOpenProfileModal,
+  onOpenAdminPanel,
   onLogout,
   onToggleStudio,
 }) => {
@@ -136,6 +139,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         <div className="kolo-sidebar-actions">
+          {currentUser.role === 'admin' && onOpenAdminPanel && (
+            <button
+              type="button"
+              className="kolo-admin-trigger"
+              onClick={onOpenAdminPanel}
+              title="Відкрити Адмін Панель"
+            >
+              <Shield size={16} />
+              <span>Адмінка</span>
+            </button>
+          )}
           <button
             type="button"
             className={`kolo-studio-trigger ${studioOpen ? 'active' : ''}`}

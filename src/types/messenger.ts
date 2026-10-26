@@ -13,6 +13,8 @@ export interface User {
   online: boolean;
   lastSeen: string;
   isBot?: boolean;
+  role?: 'admin' | 'user';
+  isBanned?: boolean;
   createdAt?: string;
   savedTheme?: ThemeConfig;
   savedPresets?: ThemeConfig[];
