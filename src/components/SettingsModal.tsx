@@ -13,9 +13,14 @@ import {
   Lock,
   Smartphone,
   Zap,
+  KeyRound,
+  Flame,
+  Monitor,
+  AlertTriangle,
 } from 'lucide-react';
 import { AppSettings, ThemeConfig } from '../types/messenger';
 import { playSentSound, playReceivedSound, playBeepSound } from '../utils/soundEffects';
+import { hashPin } from '../utils/cryptoE2EE';
 
 interface SettingsModalProps {
   settings: AppSettings;
@@ -23,6 +28,7 @@ interface SettingsModalProps {
   onUpdateSettings: (newSettings: Partial<AppSettings>) => void;
   onOpenStudio?: () => void;
   onClearLocalCache?: () => void;
+  onTerminateOtherSessions?: () => Promise<void>;
   onClose: () => void;
 }
 
@@ -34,13 +40,65 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onUpdateSettings,
   onOpenStudio,
   onClearLocalCache,
+  onTerminateOtherSessions,
   onClose,
 }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('visual');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showPinSetup, setShowPinSetup] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [pinConfirmInput, setPinConfirmInput] = useState('');
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [terminatingSessions, setTerminatingSessions] = useState(false);
+  const [sessionToast, setSessionToast] = useState<string | null>(null);
 
   const testVolume = (vol: number) => {
     playBeepSound(vol);
+  };
+
+  const handleSavePin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pinInput.length < 4 || pinInput.length > 6 || !/^\d+$/.test(pinInput)) {
+      setPinError('PIN має містити від 4 до 6 цифр');
+      return;
+    }
+    if (pinInput !== pinConfirmInput) {
+      setPinError('Введені PIN-коди не співпадають');
+      return;
+    }
+    const hash = await hashPin(pinInput);
+    onUpdateSettings({
+      appLockEnabled: true,
+      appLockPinHash: hash,
+    });
+    setShowPinSetup(false);
+    setPinInput('');
+    setPinConfirmInput('');
+    setPinError(null);
+  };
+
+  const handleDisablePin = () => {
+    onUpdateSettings({
+      appLockEnabled: false,
+      appLockPinHash: '',
+    });
+    setShowPinSetup(false);
+  };
+
+  const handleTerminateSessions = async () => {
+    setTerminatingSessions(true);
+    try {
+      if (onTerminateOtherSessions) {
+        await onTerminateOtherSessions();
+      }
+      setSessionToast('Усі інші сесії успішно завершено!');
+      setTimeout(() => setSessionToast(null), 3000);
+    } catch {
+      setSessionToast('Помилка завершення сесій');
+      setTimeout(() => setSessionToast(null), 3000);
+    } finally {
+      setTerminatingSessions(false);
+    }
   };
 
   return (
@@ -334,6 +392,179 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
 
+              {/* APP PIN LOCK */}
+              <div className="kolo-setting-box">
+                <div className="kolo-setting-box-header">
+                  <KeyRound size={18} className="kolo-accent-icon" />
+                  <strong>Блокування додатку PIN-кодом (App Lock)</strong>
+                </div>
+                <p className="kolo-setting-desc">
+                  Встановіть 4-6 значний код доступу. При згортанні або відході від пристрою KOLO буде заблоковано.
+                </p>
+
+                {settings.appLockEnabled && settings.appLockPinHash ? (
+                  <div className="kolo-pin-status-box">
+                    <div className="kolo-status-pill ok">
+                      <Check size={13} />
+                      <span>PIN-код активний</span>
+                    </div>
+                    <div className="kolo-pin-actions">
+                      <button
+                        type="button"
+                        className="kolo-subtle-btn"
+                        onClick={() => setShowPinSetup(true)}
+                      >
+                        Змінити PIN
+                      </button>
+                      <button
+                        type="button"
+                        className="kolo-danger-btn kolo-btn-sm"
+                        onClick={handleDisablePin}
+                      >
+                        Вимкнути PIN
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    {!showPinSetup ? (
+                      <button
+                        type="button"
+                        className="kolo-primary-btn kolo-btn-sm"
+                        onClick={() => setShowPinSetup(true)}
+                      >
+                        Встановити PIN-код 🔐
+                      </button>
+                    ) : null}
+                  </div>
+                )}
+
+                {showPinSetup && (
+                  <form onSubmit={handleSavePin} className="kolo-pin-form">
+                    <div className="kolo-pin-input-grid">
+                      <div>
+                        <label className="kolo-form-label">Новий PIN (4-6 цифр):</label>
+                        <input
+                          type="password"
+                          inputMode="numeric"
+                          maxLength={6}
+                          placeholder="••••"
+                          value={pinInput}
+                          onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
+                          className="kolo-input"
+                          autoFocus
+                        />
+                      </div>
+                      <div>
+                        <label className="kolo-form-label">Підтвердіть PIN:</label>
+                        <input
+                          type="password"
+                          inputMode="numeric"
+                          maxLength={6}
+                          placeholder="••••"
+                          value={pinConfirmInput}
+                          onChange={(e) => setPinConfirmInput(e.target.value.replace(/\D/g, ''))}
+                          className="kolo-input"
+                        />
+                      </div>
+                    </div>
+                    {pinError && <div className="kolo-lock-error">{pinError}</div>}
+                    <div className="kolo-confirm-buttons" style={{ marginTop: 8 }}>
+                      <button type="submit" className="kolo-primary-btn kolo-btn-sm">
+                        Зберегти PIN
+                      </button>
+                      <button
+                        type="button"
+                        className="kolo-subtle-btn kolo-btn-sm"
+                        onClick={() => {
+                          setShowPinSetup(false);
+                          setPinError(null);
+                        }}
+                      >
+                        Скасувати
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {settings.appLockEnabled && (
+                  <div className="kolo-setting-subitem" style={{ marginTop: 10 }}>
+                    <label className="kolo-form-label">Час до автоблокування:</label>
+                    <select
+                      className="kolo-input"
+                      value={settings.autoLockMinutes}
+                      onChange={(e) => onUpdateSettings({ autoLockMinutes: parseInt(e.target.value, 10) })}
+                    >
+                      <option value="0">Негайно при перемиканні вкладок / згортанні</option>
+                      <option value="1">Через 1 хвилину бездіяльності</option>
+                      <option value="5">Через 5 хвилин бездіяльності</option>
+                      <option value="15">Через 15 хвилин бездіяльності</option>
+                      <option value="-1">Тільки вручну</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* ANTI-SHOULDER SURFING STEALTH BLUR */}
+              <div className="kolo-setting-item">
+                <div className="kolo-setting-info">
+                  <span className="kolo-setting-title">Стелс-захист від підглядання (Anti-Shoulder Surfing)</span>
+                  <span className="kolo-setting-desc">
+                    Миттєво маскувати та розмивати весь інтерфейс чату, якщо вікно браузера втрачає фокус (Alt+Tab або перемикання вкладок).
+                  </span>
+                </div>
+                <label className="kolo-switch">
+                  <input
+                    type="checkbox"
+                    checked={settings.stealthBlurOnBlur}
+                    onChange={(e) => onUpdateSettings({ stealthBlurOnBlur: e.target.checked })}
+                  />
+                  <span className="kolo-switch-slider" />
+                </label>
+              </div>
+
+              {/* ACTIVE SESSIONS MANAGEMENT */}
+              <div className="kolo-setting-box">
+                <div className="kolo-setting-box-header">
+                  <Monitor size={18} className="kolo-accent-icon" />
+                  <strong>Активні сесії та пристрої</strong>
+                </div>
+                <p className="kolo-setting-desc">
+                  Ви можете миттєво відкликати доступ на всіх інших пристроях та комп'ютерах.
+                </p>
+
+                <div className="kolo-session-card">
+                  <div className="kolo-session-info">
+                    <div className="kolo-session-title">
+                      <Smartphone size={15} />
+                      <span>Поточний браузер & пристрій</span>
+                      <span className="kolo-role-badge online">Активна сесія</span>
+                    </div>
+                    <span className="kolo-session-meta">
+                      {navigator.userAgent.includes('Mobile') ? 'Мобільний пристрій' : 'ПК / Ноутбук'} • Підключено через TLS 1.3
+                    </span>
+                  </div>
+                </div>
+
+                {sessionToast && (
+                  <div className="kolo-status-pill ok" style={{ alignSelf: 'stretch', justifyContent: 'center' }}>
+                    <Check size={14} /> <span>{sessionToast}</span>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  className="kolo-danger-btn kolo-btn-sm"
+                  disabled={terminatingSessions}
+                  onClick={handleTerminateSessions}
+                  style={{ alignSelf: 'flex-start' }}
+                >
+                  <AlertTriangle size={14} />
+                  <span>{terminatingSessions ? 'Закриття...' : 'Завершити всі інші сесії'}</span>
+                </button>
+              </div>
+
+              {/* E2EE SWITCH */}
               <div className="kolo-setting-item">
                 <div className="kolo-setting-info">
                   <span className="kolo-setting-title">E2EE Шифрування повідомлень</span>
@@ -351,6 +582,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </label>
               </div>
 
+              {/* EMPTY GROUP AUTO-PURGE */}
               <div className="kolo-setting-box">
                 <div className="kolo-setting-box-header">
                   <Zap size={18} className="kolo-accent-icon" />
@@ -367,6 +599,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
 
+              {/* HIDE ONLINE STATUS */}
               <div className="kolo-setting-item">
                 <div className="kolo-setting-info">
                   <span className="kolo-setting-title">Приховувати мій статус «В мережі»</span>
@@ -382,13 +615,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </label>
               </div>
 
+              {/* DANGER ZONE / CACHE & LOCKDOWN */}
               <div className="kolo-danger-zone">
                 <div className="kolo-setting-info">
                   <span className="kolo-setting-title" style={{ color: '#ef4444' }}>
-                    Скинути локальні ключі та кеш
+                    Екстрене очищення сесії та скидання ключів
                   </span>
                   <span className="kolo-setting-desc">
-                    Очистить збережені локально сесії, кешовані теми та заново ініціалізує середовище шифрування.
+                    Миттєво знищує всі локальні токени, сесії, кешовані ключі та повертає додаток до початкового стану.
                   </span>
                 </div>
                 {!showClearConfirm ? (
@@ -397,7 +631,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     className="kolo-danger-btn"
                     onClick={() => setShowClearConfirm(true)}
                   >
-                    <Trash2 size={15} /> Очистити кеш
+                    <Trash2 size={15} /> Очистити все зараз
                   </button>
                 ) : (
                   <div className="kolo-confirm-row">

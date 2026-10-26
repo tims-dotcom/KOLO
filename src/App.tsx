@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { AuthScreen } from './components/AuthScreen';
 import { AdminPanel } from './components/AdminPanel';
+import { AppLockScreen } from './components/AppLockScreen';
 import { ChatView } from './components/ChatView';
 import { CustomizationStudio } from './components/CustomizationStudio';
 import { ChatInfoPanel, CreateChatModal, ProfileModal } from './components/Modals';
@@ -53,7 +54,7 @@ export const App: React.FC = () => {
   const [mobileChatOpen, setMobileChatOpen] = useState<boolean>(true);
   const [toastText, setToastText] = useState<string | null>(null);
 
-  // App Settings State (Visual, Sound, E2EE, Privacy)
+  // App Settings State (Visual, Sound, E2EE, Privacy, App Lock)
   const [settings, setSettings] = useState<AppSettings>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_SETTINGS_KEY);
@@ -63,6 +64,22 @@ export const App: React.FC = () => {
     }
     return DEFAULT_APP_SETTINGS;
   });
+
+  // App Lock & Stealth Blur state
+  const [isAppLocked, setIsAppLocked] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_SETTINGS_KEY);
+      if (saved) {
+        const parsed: AppSettings = JSON.parse(saved);
+        return Boolean(parsed.appLockEnabled && parsed.appLockPinHash);
+      }
+    } catch {
+      // ignore
+    }
+    return false;
+  });
+  const [isStealthBlurred, setIsStealthBlurred] = useState<boolean>(false);
+  const lastActiveRef = useRef<number>(Date.now());
 
   // Theme State
   const [theme, setTheme] = useState<ThemeConfig>(() => {
@@ -110,6 +127,73 @@ export const App: React.FC = () => {
       document.documentElement.classList.remove('reduce-motion');
     }
   }, [settings]);
+
+  // Stealth Shield & Inactivity Auto-Lock Tracker
+  useEffect(() => {
+    const handleActivity = () => {
+      lastActiveRef.current = Date.now();
+    };
+    window.addEventListener('mousemove', handleActivity);
+    window.addEventListener('keydown', handleActivity);
+    window.addEventListener('touchstart', handleActivity);
+
+    const handleVisibility = () => {
+      if (document.hidden) {
+        if (settings.stealthBlurOnBlur) {
+          setIsStealthBlurred(true);
+        }
+        if (settings.appLockEnabled && settings.appLockPinHash) {
+          if (settings.autoLockMinutes === 0) {
+            setIsAppLocked(true);
+          }
+        }
+      } else {
+        if (settings.stealthBlurOnBlur) {
+          setIsStealthBlurred(false);
+        }
+        if (settings.appLockEnabled && settings.appLockPinHash && settings.autoLockMinutes > 0) {
+          const inactiveSec = (Date.now() - lastActiveRef.current) / 1000;
+          if (inactiveSec >= settings.autoLockMinutes * 60) {
+            setIsAppLocked(true);
+          }
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    const handleBlur = () => {
+      if (settings.stealthBlurOnBlur) {
+        setIsStealthBlurred(true);
+      }
+      if (settings.appLockEnabled && settings.appLockPinHash && settings.autoLockMinutes === 0) {
+        setIsAppLocked(true);
+      }
+    };
+
+    const handleFocus = () => {
+      if (settings.stealthBlurOnBlur) {
+        setIsStealthBlurred(false);
+      }
+    };
+
+    window.addEventListener('blur', handleBlur);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      window.removeEventListener('mousemove', handleActivity);
+      window.removeEventListener('keydown', handleActivity);
+      window.removeEventListener('touchstart', handleActivity);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [
+    settings.stealthBlurOnBlur,
+    settings.appLockEnabled,
+    settings.appLockPinHash,
+    settings.autoLockMinutes,
+  ]);
 
   // Apply theme CSS variables and cloud-sync to user profile
   useEffect(() => {
@@ -568,6 +652,44 @@ export const App: React.FC = () => {
     showToast('Налаштування збережено');
   };
 
+  const handleChangeEphemeralTimer = async (chatId: string, ttlSeconds: number) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`/api/chats/${chatId}/ephemeral`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ ttlSeconds }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setChats((prev) =>
+          prev.map((c) =>
+            c.id === chatId ? { ...c, ephemeralTimerSeconds: data.ephemeralTimerSeconds } : c
+          )
+        );
+      }
+    } catch {
+      showToast('Помилка оновлення таймера');
+    }
+  };
+
+  const handleTerminateOtherSessions = async () => {
+    if (!token) return;
+    const res = await fetch('/api/auth/terminate-other-sessions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'x-socket-id': socketRef.current?.id || '',
+      },
+    });
+    if (!res.ok) {
+      throw new Error('Failed to terminate sessions');
+    }
+  };
+
   const handleClearLocalCache = () => {
     try {
       localStorage.removeItem(STORAGE_SETTINGS_KEY);
@@ -625,6 +747,8 @@ export const App: React.FC = () => {
         onOpenProfileModal={() => setProfileModalOpen(true)}
         onOpenSettingsModal={() => setSettingsModalOpen(true)}
         onOpenAdminPanel={() => setAdminPanelOpen(true)}
+        onLockApp={() => setIsAppLocked(true)}
+        isAppLockConfigured={Boolean(settings.appLockEnabled && settings.appLockPinHash)}
         onLogout={handleLogout}
         onToggleStudio={() => setStudioOpen((v) => !v)}
       />
@@ -641,6 +765,7 @@ export const App: React.FC = () => {
           studioOpen={studioOpen}
           infoOpen={infoOpen}
           onUpdateSettings={handleUpdateSettings}
+          onChangeEphemeralTimer={handleChangeEphemeralTimer}
           onSendMessage={handleSendMessage}
           onEditMessage={handleEditMessage}
           onDeleteMessage={handleDeleteMessage}
@@ -712,6 +837,7 @@ export const App: React.FC = () => {
             setStudioOpen(true);
           }}
           onClearLocalCache={handleClearLocalCache}
+          onTerminateOtherSessions={handleTerminateOtherSessions}
           onClose={() => setSettingsModalOpen(false)}
         />
       )}
@@ -723,6 +849,29 @@ export const App: React.FC = () => {
           onClose={() => setAdminPanelOpen(false)}
           onShowToast={showToast}
         />
+      )}
+
+      {/* App Lock PIN Shield Screen */}
+      {isAppLocked && settings.appLockEnabled && settings.appLockPinHash && (
+        <AppLockScreen
+          expectedPinHash={settings.appLockPinHash}
+          onUnlock={() => setIsAppLocked(false)}
+          onEmergencyWipe={handleClearLocalCache}
+        />
+      )}
+
+      {/* Anti-Shoulder Surfing Stealth Overlay */}
+      {isStealthBlurred && !isAppLocked && (
+        <div
+          className="kolo-stealth-shield-overlay"
+          onClick={() => setIsStealthBlurred(false)}
+        >
+          <div className="kolo-stealth-shield-card">
+            <span style={{ fontSize: 36 }}>👁️</span>
+            <h3>Стелс-маскування активне</h3>
+            <p>Вміст приховано для захисту від підглядання. Натисніть тут для повернення.</p>
+          </div>
+        </div>
       )}
 
       {toastText && <div className="kolo-toast">{toastText}</div>}

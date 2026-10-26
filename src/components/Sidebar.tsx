@@ -28,6 +28,8 @@ interface SidebarProps {
   onOpenProfileModal: () => void;
   onOpenSettingsModal?: () => void;
   onOpenAdminPanel?: () => void;
+  onLockApp?: () => void;
+  isAppLockConfigured?: boolean;
   onLogout: () => void;
   onToggleStudio: () => void;
 }
@@ -49,6 +51,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenProfileModal,
   onOpenSettingsModal,
   onOpenAdminPanel,
+  onLockApp,
+  isAppLockConfigured,
   onLogout,
   onToggleStudio,
 }) => {
@@ -177,6 +181,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
               title="Налаштування додатку"
             >
               <Settings size={18} />
+            </button>
+          )}
+          {isAppLockConfigured && onLockApp && (
+            <button
+              type="button"
+              className="kolo-icon-btn"
+              onClick={onLockApp}
+              title="Заблокувати месенджер (PIN-код)"
+              style={{ color: '#f59e0b' }}
+            >
+              <Lock size={17} />
             </button>
           )}
         </div>

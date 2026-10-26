@@ -3,11 +3,13 @@ import {
   ArrowLeft,
   Check,
   CheckCheck,
+  Clock,
   Copy,
   CornerUpLeft,
   Download,
   Edit3,
   FileText,
+  Flame,
   Info,
   Lock,
   Mic,
@@ -32,6 +34,37 @@ import { LiveBackground } from './LiveBackground';
 import { SafetyVerificationModal } from './SafetyVerificationModal';
 import { VoiceMessagePlayer } from './VoiceMessagePlayer';
 
+const MessageTtlBadge: React.FC<{ expiresAt: string }> = ({ expiresAt }) => {
+  const [remainingSec, setRemainingSec] = useState(() => {
+    const diff = Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000);
+    return Math.max(0, diff);
+  });
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const diff = Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000);
+      setRemainingSec(Math.max(0, diff));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [expiresAt]);
+
+  if (remainingSec <= 0) return null;
+
+  const display =
+    remainingSec < 60
+      ? `${remainingSec}s`
+      : remainingSec < 3600
+      ? `${Math.ceil(remainingSec / 60)}m`
+      : `${Math.ceil(remainingSec / 3600)}h`;
+
+  return (
+    <span className="kolo-msg-ttl-badge" title={`Зникне через ${remainingSec} сек`}>
+      <Flame size={11} className="kolo-flame-icon" />
+      <span>{display}</span>
+    </span>
+  );
+};
+
 interface ChatViewProps {
   chat: Chat;
   currentUser: User;
@@ -43,6 +76,7 @@ interface ChatViewProps {
   studioOpen: boolean;
   infoOpen: boolean;
   onUpdateSettings?: (newSettings: Partial<AppSettings>) => void;
+  onChangeEphemeralTimer?: (chatId: string, ttlSeconds: number) => void;
   onSendMessage: (
     text: string,
     replyToId?: string,
@@ -96,6 +130,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   onToggleStudio,
   onToggleInfo,
   onBackToList,
+  onChangeEphemeralTimer,
 }) => {
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -107,6 +142,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [safetyModalOpen, setSafetyModalOpen] = useState(false);
+  const [timerMenuOpen, setTimerMenuOpen] = useState(false);
 
   // E2EE Decrypted messages cache (in-memory only, zero server exposure)
   const [decryptedMap, setDecryptedMap] = useState<Record<string, string>>({});
@@ -428,6 +464,55 @@ export const ChatView: React.FC<ChatViewProps> = ({
         </div>
 
         <div className="kolo-chat-header-actions">
+          {/* Ephemeral Messages Timer Control */}
+          <div className="kolo-header-popover-wrap">
+            <button
+              type="button"
+              className={`kolo-icon-btn ${chat.ephemeralTimerSeconds ? 'active' : ''}`}
+              onClick={() => setTimerMenuOpen((v) => !v)}
+              title={`Таймер автознищення повідомлень: ${
+                chat.ephemeralTimerSeconds ? `${chat.ephemeralTimerSeconds} сек` : 'Вимкнено'
+              }`}
+            >
+              {chat.ephemeralTimerSeconds ? <Flame size={17} style={{ color: '#f59e0b' }} /> : <Clock size={17} />}
+            </button>
+
+            {timerMenuOpen && (
+              <div className="kolo-ephemeral-menu" onClick={(e) => e.stopPropagation()}>
+                <div className="kolo-ephemeral-menu-header">
+                  <Flame size={15} style={{ color: '#f59e0b' }} />
+                  <strong>Автознищення повідомлень</strong>
+                </div>
+                <p className="kolo-ephemeral-menu-desc">
+                  Повідомлення видаляються автоматично після закінчення таймера:
+                </p>
+                {[
+                  { label: 'Вимкнено', ttl: 0 },
+                  { label: '⏱️ 30 секунд', ttl: 30 },
+                  { label: '⏱️ 1 хвилина', ttl: 60 },
+                  { label: '⏱️ 5 хвилин', ttl: 300 },
+                  { label: '⏱️ 1 година', ttl: 3600 },
+                  { label: '⏱️ 24 години', ttl: 86400 },
+                ].map((opt) => (
+                  <button
+                    key={opt.ttl}
+                    type="button"
+                    className={`kolo-ephemeral-opt-btn ${(chat.ephemeralTimerSeconds || 0) === opt.ttl ? 'active' : ''}`}
+                    onClick={() => {
+                      if (onChangeEphemeralTimer) {
+                        onChangeEphemeralTimer(chat.id, opt.ttl);
+                      }
+                      setTimerMenuOpen(false);
+                    }}
+                  >
+                    <span>{opt.label}</span>
+                    {(chat.ephemeralTimerSeconds || 0) === opt.ttl && <Check size={14} />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <button
             type="button"
             className="kolo-e2ee-header-pill"
@@ -742,6 +827,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   )}
 
                   <div className="kolo-bubble-meta">
+                    {msg.expiresAt && <MessageTtlBadge expiresAt={msg.expiresAt} />}
                     {isEncryptedMessage(msg.text) && (
                       <span className="kolo-msg-e2ee-tag" title="Наскрізне шифрування AES-256-GCM (Zero-Knowledge)">
                         <Lock size={11} />

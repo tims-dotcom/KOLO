@@ -279,6 +279,40 @@ function getAuthUserFromRequest(req: express.Request): StoredUser | null {
   return db.users.find((u) => u.id === userId) || null;
 }
 
+// IP Brute-Force Rate Limiter for Login Protection
+interface RateLimitRecord {
+  attempts: number;
+  blockedUntil?: number;
+}
+const loginRateLimiter = new Map<string, RateLimitRecord>();
+
+function checkLoginRateLimit(ip: string): { blocked: boolean; retryAfterSec?: number } {
+  const rec = loginRateLimiter.get(ip);
+  if (!rec) return { blocked: false };
+  const now = Date.now();
+  if (rec.blockedUntil && rec.blockedUntil > now) {
+    return { blocked: true, retryAfterSec: Math.ceil((rec.blockedUntil - now) / 1000) };
+  }
+  if (rec.blockedUntil && rec.blockedUntil <= now) {
+    loginRateLimiter.delete(ip);
+    return { blocked: false };
+  }
+  return { blocked: false };
+}
+
+function recordFailedLogin(ip: string): void {
+  const rec = loginRateLimiter.get(ip) || { attempts: 0 };
+  rec.attempts += 1;
+  if (rec.attempts >= 5) {
+    rec.blockedUntil = Date.now() + 15 * 60 * 1000; // 15 minutes lockout after 5 fails
+  }
+  loginRateLimiter.set(ip, rec);
+}
+
+function clearLoginAttempts(ip: string): void {
+  loginRateLimiter.delete(ip);
+}
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -401,6 +435,19 @@ app.post('/api/auth/register', (req, res) => {
 
 // Login with username/email + password
 app.post('/api/auth/login', (req, res) => {
+  const clientIp = String(
+    req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown'
+  );
+  const rateLimit = checkLoginRateLimit(clientIp);
+  if (rateLimit.blocked) {
+    res.status(429).json({
+      error: `Забагато невдалих спроб входу. Задля захисту акаунта від підбору доступ заблоковано на ${Math.ceil(
+        (rateLimit.retryAfterSec || 60) / 60
+      )} хв.`,
+    });
+    return;
+  }
+
   const { login, password } = req.body;
   const cleanLogin = String(login || '')
     .trim()
@@ -414,6 +461,7 @@ app.post('/api/auth/login', (req, res) => {
   );
 
   if (!user || !verifyPassword(String(password || ''), user.passwordHash)) {
+    recordFailedLogin(clientIp);
     res.status(401).json({ error: 'Невірний @username / email або пароль' });
     return;
   }
@@ -422,6 +470,9 @@ app.post('/api/auth/login', (req, res) => {
     res.status(403).json({ error: 'Ваш акаунт заблоковано адміністрацією' });
     return;
   }
+
+  // Clear failed rate limit counter on success
+  clearLoginAttempts(clientIp);
 
   user.online = true;
   user.lastSeen = new Date().toISOString();
@@ -664,6 +715,69 @@ app.post('/api/chats/:chatId/leave', (req, res) => {
   saveDatabase();
   io.emit('chats:update', db.chats);
   res.json({ ok: true });
+});
+
+// Terminate all other active sessions for current user
+app.post('/api/auth/terminate-other-sessions', (req, res) => {
+  const authUser = getAuthUserFromRequest(req);
+  if (!authUser) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  const currentSocketId = req.headers['x-socket-id'] as string | undefined;
+  for (const [sockId, uid] of socketUsers.entries()) {
+    if (uid === authUser.id && sockId !== currentSocketId) {
+      const s = io.sockets.sockets.get(sockId);
+      if (s) {
+        s.emit('auth:error', { message: 'Сесію завершено з іншого пристрою' });
+        s.disconnect(true);
+      }
+      socketUsers.delete(sockId);
+    }
+  }
+  res.json({ ok: true, message: 'Усі інші активні сесії успішно закрито' });
+});
+
+// Configure Disappearing / Ephemeral Messages Timer for a chat
+app.post('/api/chats/:chatId/ephemeral', (req, res) => {
+  const authUser = getAuthUserFromRequest(req);
+  if (!authUser) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  const chat = db.chats.find((c) => c.id === req.params.chatId);
+  if (!chat) {
+    res.status(404).json({ error: 'Чат не знайдено' });
+    return;
+  }
+  const { ttlSeconds } = req.body;
+  const ttl = typeof ttlSeconds === 'number' ? Math.max(0, ttlSeconds) : 0;
+  chat.ephemeralTimerSeconds = ttl;
+
+  const timerLabel =
+    ttl === 0
+      ? 'вимкнено'
+      : ttl < 60
+      ? `${ttl} сек`
+      : ttl < 3600
+      ? `${Math.round(ttl / 60)} хв`
+      : `${Math.round(ttl / 3600)} год`;
+
+  const sysMsg: Message = {
+    id: `m_sys_eph_${Date.now()}`,
+    chatId: chat.id,
+    senderId: authUser.id,
+    text: `⏱️ ${authUser.displayName} встановив(-ла) таймер зникнення повідомлень: ${timerLabel}`,
+    createdAt: new Date().toISOString(),
+    reactions: [],
+    readBy: [authUser.id],
+    isSystem: true,
+  };
+  db.messages.push(sysMsg);
+  saveDatabase();
+  io.emit('chats:update', db.chats);
+  io.emit('message:new', sysMsg);
+  res.json({ ok: true, ephemeralTimerSeconds: chat.ephemeralTimerSeconds });
 });
 
 // Upload file / image / voice audio / avatar
@@ -920,6 +1034,22 @@ if (fs.existsSync(DIST_DIR)) {
   });
 }
 
+// Ephemeral / Disappearing message real-time garbage collector
+setInterval(() => {
+  const now = Date.now();
+  const expired = db.messages.filter(
+    (m) => m.expiresAt && new Date(m.expiresAt).getTime() <= now
+  );
+  if (expired.length > 0) {
+    const expiredIds = new Set(expired.map((m) => m.id));
+    db.messages = db.messages.filter((m) => !expiredIds.has(m.id));
+    saveDatabase();
+    for (const exp of expired) {
+      io.emit('message:deleted', { messageId: exp.id, chatId: exp.chatId });
+    }
+  }
+}, 1000);
+
 // Track connected sockets -> userId
 const socketUsers = new Map<string, string>();
 
@@ -974,8 +1104,18 @@ io.on('connection', (socket) => {
       text: string;
       replyToId?: string;
       attachment?: Message['attachment'];
+      ttlSeconds?: number;
     }) => {
       const authedId = socketUsers.get(socket.id) || payload.senderId;
+      const chat = db.chats.find((c) => c.id === payload.chatId);
+      const ttl = payload.ttlSeconds || chat?.ephemeralTimerSeconds || 0;
+      const expiresAt =
+        ttl > 0 ? new Date(Date.now() + ttl * 1000).toISOString() : undefined;
+
+      const isEncrypted =
+        typeof payload.text === 'string' &&
+        payload.text.startsWith('🔒[E2EE:v1:');
+
       const newMsg: Message = {
         id: `m_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         chatId: payload.chatId,
@@ -986,6 +1126,9 @@ io.on('connection', (socket) => {
         reactions: [],
         attachment: payload.attachment,
         readBy: [authedId],
+        isEncrypted,
+        ttlSeconds: ttl > 0 ? ttl : undefined,
+        expiresAt,
       };
 
       db.messages.push(newMsg);

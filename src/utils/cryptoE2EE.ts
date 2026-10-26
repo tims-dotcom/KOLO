@@ -209,3 +209,15 @@ export async function generateSafetyFingerprint(
     };
   }
 }
+
+/**
+ * Hashes a 4-6 digit numeric PIN for the local App Lock.
+ */
+export async function hashPin(pin: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const hash = await crypto.subtle.digest('SHA-256', encoder.encode(`kolo:pin:salt:v1:${pin}`));
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+

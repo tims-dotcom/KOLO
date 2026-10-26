@@ -57,6 +57,8 @@ export interface Message {
   pinned?: boolean;
   isSystem?: boolean;
   isEncrypted?: boolean;
+  expiresAt?: string; // ISO string when message automatically self-destructs
+  ttlSeconds?: number; // TTL in seconds (e.g. 30, 60, 300, 3600, 86400)
 }
 
 export interface Chat {
@@ -72,6 +74,7 @@ export interface Chat {
   ownerId?: string;
   isPublic?: boolean;
   pinnedMessageId?: string;
+  ephemeralTimerSeconds?: number; // Disappearing messages timer (0 = off)
   createdAt: string;
 }
 
@@ -170,10 +173,15 @@ export interface AppSettings {
   soundOutgoing: boolean;
   soundIncoming: boolean;
 
-  // Security & Encryption
+  // Security, Lock & Privacy
   e2eeEnabled: boolean;
   customChatKeys?: Record<string, string>; // custom passphrase per chatId if user sets one
   hideOnlineStatus: boolean;
+  appLockEnabled: boolean;
+  appLockPinHash?: string; // SHA-256 hash of PIN code
+  autoLockMinutes: number; // 0 = immediately on tab blur, 1, 5, 15, -1 = manual only
+  stealthBlurOnBlur: boolean; // Blurs app when window loses focus
+  ephemeralDefaultTtl: number; // 0 (off), 30, 60, 300, 3600, 86400
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -190,5 +198,10 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   e2eeEnabled: true,
   customChatKeys: {},
   hideOnlineStatus: false,
+  appLockEnabled: false,
+  appLockPinHash: '',
+  autoLockMinutes: 5,
+  stealthBlurOnBlur: true,
+  ephemeralDefaultTtl: 0,
 };
 
